@@ -15,6 +15,8 @@ Un seul script [AutoHotkey v2](https://www.autohotkey.com/) léger (≈ 3 Mo de 
 | `;mail`, `;ecole`, `;nom`, `;cordia`… | Raccourcis texte définis dans `config.ini` |
 | `;date` | Date du jour (`19/10/2026`) |
 | `;heure` | Heure actuelle (`14:32`) |
+| Barre ☀ sur la barre des tâches | Clic, glisser ou molette pour régler la luminosité |
+| Clic sur l'icône du toolkit ou `Ctrl` + `Alt` + `L` | Afficher / masquer la barre |
 | `Ctrl` + `Alt` + `↑` / `↓` | Luminosité +10 % / -10 % |
 | Molette sur la barre des tâches | Luminosité +5 % / -5 % |
 | `Ctrl` + `Alt` + `C` (fichiers sélectionnés) | Menu de conversion |
@@ -53,6 +55,10 @@ cordia=Cordialement,\nPrénom Nom
 `\n` crée un retour à la ligne. Le `;` devant le raccourci est ajouté automatiquement.
 
 `config.ini` est listé dans `.gitignore` : tes données personnelles restent sur ton PC et ne sont jamais publiées.
+
+## Barre de luminosité
+
+Une petite barre est posée en permanence sur la barre des tâches, juste à gauche des icônes. Elle se cache toute seule quand une appli passe en plein écran. Sa position se règle dans `config.ini`, section `[Barre]` (`auto`, `gauche`, ou une distance en pixels depuis le bord droit).
 
 ## Luminosité des écrans externes
 

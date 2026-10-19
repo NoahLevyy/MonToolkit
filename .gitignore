@@ -1,0 +1,13 @@
+# Infos perso : restent sur ce PC, jamais sur GitHub
+config.ini
+Raccourcis*.docx
+~$*.docx
+
+# Fichiers générés par Windows
+desktop.ini
+Thumbs.db
+*.lnk
+
+# Fichiers temporaires
+*.tmp
+*.bak

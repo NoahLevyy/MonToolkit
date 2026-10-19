@@ -1,0 +1,3 @@
+# Garder les fins de ligne Windows pour les scripts AutoHotkey et les .ini
+*.ahk text eol=crlf
+*.ini text eol=crlf

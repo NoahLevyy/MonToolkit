@@ -6,7 +6,7 @@ Un seul script [AutoHotkey v2](https://www.autohotkey.com/) léger (≈ 3 Mo de 
 |---|---|---|
 | **Raccourcis texte** | Espanso | Tape `;mail` → ton adresse e-mail s'écrit toute seule |
 | **Luminosité** | Twinkle Tray | Règle la luminosité de tous tes écrans au clavier ou à la molette |
-| **Convertisseur** | File Converter | Convertit images, vidéos et sons en deux touches |
+| **Convertisseur** | File Converter | Convertit images, vidéos, sons et documents (Word ↔ PDF…) depuis le clic droit ou en deux touches |
 
 ## Raccourcis
 
@@ -20,6 +20,7 @@ Un seul script [AutoHotkey v2](https://www.autohotkey.com/) léger (≈ 3 Mo de 
 | `Ctrl` + `Alt` + `↑` / `↓` | Luminosité +10 % / -10 % |
 | Molette sur la barre des tâches | Luminosité +5 % / -5 % |
 | `Ctrl` + `Alt` + `C` (fichiers sélectionnés) | Menu de conversion |
+| Clic droit → *Afficher plus d'options* → **Convertir avec Mon Toolkit** | Menu de conversion |
 | `Ctrl` + `Alt` + `H` | Aide |
 
 ### Conversions disponibles
@@ -27,8 +28,16 @@ Un seul script [AutoHotkey v2](https://www.autohotkey.com/) léger (≈ 3 Mo de 
 - **Images** → PNG, JPG, WEBP, PDF, ICO, compression JPG, fusion de plusieurs images en un PDF
 - **Vidéos** → MP4, MP3 (extraire le son), GIF, compression
 - **Audio** → MP3, WAV, M4A
+- **Word** (DOCX, DOC, ODT, RTF) → PDF · **PDF** → Word (DOCX)
+- **PowerPoint** → PDF · **Excel** → PDF
 
 Le fichier converti est créé à côté de l'original, qui n'est jamais modifié.
+
+Les conversions de documents utilisent Microsoft Office (Word, PowerPoint, Excel) en arrière-plan : il doit être installé.
+
+### Clic droit
+
+Au lancement, le toolkit ajoute **Convertir avec Mon Toolkit** au menu clic droit de l'Explorateur (clé `HKCU\Software\Classes\*\shell\MonToolkit`, sans droits administrateur). Sous Windows 11, l'entrée se trouve dans **Afficher plus d'options**, ou directement avec **Maj + clic droit**. Pour la retirer : clic droit sur l'icône du toolkit → décocher **Convertir dans le clic droit**.
 
 ## Installation
 
@@ -36,7 +45,7 @@ Le fichier converti est créé à côté de l'original, qui n'est jamais modifi�
    ```powershell
    winget install AutoHotkey.AutoHotkey Gyan.FFmpeg ImageMagick.ImageMagick
    ```
-   FFmpeg et ImageMagick ne servent qu'au convertisseur.
+   FFmpeg et ImageMagick ne servent qu'au convertisseur (images, vidéos, sons).
 2. Redémarre le PC pour que FFmpeg et ImageMagick soient trouvés.
 3. Clone ou télécharge ce dépôt, puis double-clique sur `MonToolkit.ahk`.
 4. Au premier lancement, `config.ini` est créé à partir de `config.exemple.ini` et s'ouvre dans le Bloc-notes : mets tes vraies infos, enregistre, puis clic droit sur l'icône du toolkit → **Recharger**.

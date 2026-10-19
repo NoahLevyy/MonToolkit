@@ -1,5 +1,16 @@
 #Requires AutoHotkey v2.0
-#SingleInstance Force
+#SingleInstance Off          ; géré à la main (le clic droit lance des copies éphémères)
+
+; Lancé depuis le clic droit de l'Explorateur : on passe le fichier à l'instance
+; principale (qui affiche le menu de conversion) puis on s'arrête aussitôt.
+if (A_Args.Length >= 2 && A_Args[1] = "/convertir") {
+    EnvoyerAInstancePrincipale(A_Args[2])
+    ExitApp
+}
+FermerAnciennesInstances()
+global g_marqueur := Gui(, "MonToolkit_Principal")   ; fenêtre invisible qui reçoit les fichiers
+OnMessage 0x4A, RecevoirFichier                       ; WM_COPYDATA
+
 A_IconTip := "Mon Toolkit"
 if FileExist(A_ScriptDir "\icone.ico")
     TraySetIcon A_ScriptDir "\icone.ico"
@@ -335,14 +346,16 @@ RafraichirNiveau()
 ;     Sélectionne un ou plusieurs fichiers dans l'Explorateur ou sur le
 ;     Bureau, puis  Ctrl + Alt + C  →  menu de conversion.
 ;     Le résultat est créé à côté de l'original (l'original est gardé).
-;     Nécessite FFmpeg (vidéo/audio) et ImageMagick (images).
+;     Nécessite FFmpeg (vidéo/audio), ImageMagick (images)
+;     et Microsoft Office (Word / PowerPoint / Excel → PDF, PDF → Word).
 ; =====================================================================
 #HotIf WinActive("ahk_class CabinetWClass") || WinActive("ahk_class Progman") || WinActive("ahk_class WorkerW")
 ^!c::MenuConversion()
 #HotIf
 
-MenuConversion() {
-    fichiers := FichiersSelectionnes()
+MenuConversion(fichiers := 0) {
+    if !fichiers
+        fichiers := FichiersSelectionnes()
     if !fichiers.Length {
         ToolTip "Sélectionne d'abord un ou plusieurs fichiers"
         SetTimer () => ToolTip(), -1500
@@ -370,6 +383,16 @@ MenuConversion() {
         for cible in ["mp3", "wav", "m4a"]
             if cible != ext
                 m.Add "Audio → " StrUpper(cible), Convertir.Bind(fichiers, "audio", cible)
+    } else if EstWord(ext) {
+        m.Add "Document → PDF", ConvertirOffice.Bind(fichiers, "word", "pdf")
+        if ext != "docx"
+            m.Add "Document → DOCX", ConvertirOffice.Bind(fichiers, "word", "docx")
+    } else if (ext = "pdf") {
+        m.Add "PDF → Word (DOCX)", ConvertirOffice.Bind(fichiers, "word", "docx")
+    } else if EstPowerPoint(ext) {
+        m.Add "Présentation → PDF", ConvertirOffice.Bind(fichiers, "powerpoint", "pdf")
+    } else if EstExcel(ext) {
+        m.Add "Classeur → PDF", ConvertirOffice.Bind(fichiers, "excel", "pdf")
     } else {
         ToolTip "Format ." ext " pas pris en charge"
         SetTimer () => ToolTip(), -1500
@@ -471,6 +494,143 @@ OutilDispo(nom) {
 EstImage(e) => e ~= "^(png|jpe?g|webp|bmp|gif|tiff?|heic|avif|ico)$"
 EstVideo(e) => e ~= "^(mp4|mov|mkv|avi|webm|m4v|wmv)$"
 EstAudio(e) => e ~= "^(mp3|wav|m4a|aac|flac|ogg|opus|wma)$"
+EstWord(e) => e ~= "^(docx?|odt|rtf)$"
+EstPowerPoint(e) => e ~= "^(pptx?|odp)$"
+EstExcel(e) => e ~= "^(xlsx?|ods|csv)$"
+
+; ---------- documents : Word, PowerPoint et Excel font la conversion en arrière-plan ----------
+ConvertirOffice(fichiers, appli, cible, *) {
+    progid := Map("word", "Word.Application", "powerpoint", "PowerPoint.Application", "excel", "Excel.Application")
+    nomAppli := Map("word", "Word", "powerpoint", "PowerPoint", "excel", "Excel")[appli]
+    try app := ComObject(progid[appli])
+    catch {
+        MsgBox "Microsoft " nomAppli " est nécessaire pour cette conversion.", "Convertisseur", "Icon!"
+        return
+    }
+    try app.DisplayAlerts := (appli = "powerpoint") ? 1 : 0     ; aucune boîte de dialogue
+    if (appli = "word")   ; pas de message « Word va convertir votre PDF… »
+        try RegWrite 1, "REG_DWORD", "HKCU\Software\Microsoft\Office\16.0\Word\Options", "DisableConvertPdfWarning"
+
+    reussis := 0
+    for src in fichiers {
+        SplitPath src, , &dossier, , &nom
+        sortie := CheminLibre(dossier "\" nom, cible)
+        ToolTip "Conversion " A_Index " / " fichiers.Length " avec " nomAppli "…"
+        try {
+            switch appli {
+                case "word":
+                    doc := app.Documents.Open(src, false, cible = "pdf")   ; (fichier, ConfirmConversions, ReadOnly)
+                    if (cible = "pdf")
+                        doc.ExportAsFixedFormat(sortie, 17)                 ; 17 = PDF
+                    else
+                        doc.SaveAs2(sortie, 16)                             ; 16 = DOCX
+                    doc.Close(0)
+                case "powerpoint":
+                    pres := app.Presentations.Open(src, true, false, false) ; lecture seule, sans fenêtre
+                    pres.SaveAs(sortie, 32)                                 ; 32 = PDF
+                    pres.Close()
+                case "excel":
+                    classeur := app.Workbooks.Open(src, 0, true)
+                    classeur.ExportAsFixedFormat(0, sortie)                 ; 0 = PDF
+                    classeur.Close(false)
+            }
+            if FileExist(sortie)
+                reussis++
+        }
+    }
+    ToolTip
+    ; On ne ferme l'appli que si aucun de tes documents n'y est ouvert
+    try {
+        ouverts := (appli = "word") ? app.Documents.Count : (appli = "powerpoint") ? app.Presentations.Count : app.Workbooks.Count
+        if (ouverts = 0)
+            app.Quit()
+    }
+    TrayTip reussis " / " fichiers.Length " fichier(s) converti(s)", "Convertisseur"
+}
+
+
+; =====================================================================
+;  4. CLIC DROIT DANS L'EXPLORATEUR
+;     Ajoute « Convertir avec Mon Toolkit » au menu clic droit
+;     (Windows 11 : dans « Afficher plus d'options », ou Maj + clic droit).
+;     Chaque fichier sélectionné est transmis à l'instance principale,
+;     qui affiche le menu de conversion une seule fois pour tout le lot.
+; =====================================================================
+global CLE_CLIC_DROIT := "HKCU\Software\Classes\*\shell\MonToolkit"
+global g_clicDroitActif := RegRead("HKCU\Software\MonToolkit", "ClicDroit", 1)
+global g_fileClicDroit := []
+
+if g_clicDroitActif
+    EnregistrerClicDroit()
+
+EnregistrerClicDroit() {
+    try {
+        RegWrite "Convertir avec Mon Toolkit", "REG_SZ", CLE_CLIC_DROIT, "MUIVerb"
+        RegWrite A_ScriptDir "\icone.ico", "REG_SZ", CLE_CLIC_DROIT, "Icon"
+        RegWrite "Player", "REG_SZ", CLE_CLIC_DROIT, "MultiSelectModel"
+        RegWrite '"' A_AhkPath '" "' A_ScriptFullPath '" /convertir "%1"', "REG_SZ", CLE_CLIC_DROIT "\command"
+    }
+}
+
+BasculerClicDroit(nomItem, *) {
+    global g_clicDroitActif
+    g_clicDroitActif := !g_clicDroitActif
+    RegWrite g_clicDroitActif, "REG_DWORD", "HKCU\Software\MonToolkit", "ClicDroit"
+    if g_clicDroitActif {
+        EnregistrerClicDroit()
+        A_TrayMenu.Check nomItem
+    } else {
+        try RegDeleteKey CLE_CLIC_DROIT
+        A_TrayMenu.Uncheck nomItem
+    }
+}
+
+; --- côté copie éphémère : envoyer le chemin à l'instance principale ---
+EnvoyerAInstancePrincipale(fichier) {
+    DetectHiddenWindows true
+    cible := WinExist("MonToolkit_Principal ahk_class AutoHotkeyGUI")
+    if !cible {                                   ; le toolkit ne tourne pas : on le lance
+        Run '"' A_AhkPath '" "' A_ScriptFullPath '"'
+        cible := WinWait("MonToolkit_Principal ahk_class AutoHotkeyGUI", , 5)
+        if !cible
+            return
+    }
+    try DllCall("AllowSetForegroundWindow", "UInt", WinGetPID(cible))   ; pour que le menu s'affiche devant
+    cds := Buffer(A_PtrSize * 3, 0)
+    NumPut "Ptr", 0x4D54, cds, 0                                  ; signature « MT »
+    NumPut "UInt", (StrLen(fichier) + 1) * 2, cds, A_PtrSize
+    NumPut "Ptr", StrPtr(fichier), cds, A_PtrSize * 2
+    try SendMessage 0x4A, 0, cds, , cible
+}
+
+; --- côté instance principale : regrouper les fichiers puis afficher le menu ---
+RecevoirFichier(wParam, lParam, msg, hwnd) {
+    if (NumGet(lParam, 0, "Ptr") != 0x4D54)
+        return
+    g_fileClicDroit.Push(StrGet(NumGet(lParam, A_PtrSize * 2, "Ptr")))
+    SetTimer TraiterClicDroit, -350               ; attend que tous les fichiers soient arrivés
+    return true
+}
+
+TraiterClicDroit() {
+    global g_fileClicDroit
+    fichiers := g_fileClicDroit, g_fileClicDroit := []
+    if fichiers.Length
+        MenuConversion(fichiers)
+}
+
+; Remplace #SingleInstance Force : ferme les autres exemplaires du toolkit
+FermerAnciennesInstances() {
+    DetectHiddenWindows true
+    for hwnd in WinGetList(A_ScriptFullPath " ahk_class AutoHotkey") {
+        if (hwnd = A_ScriptHwnd)
+            continue
+        pid := WinGetPID(hwnd)
+        try WinClose hwnd
+        if !ProcessWaitClose(pid, 2)
+            try ProcessClose pid
+    }
+}
 
 
 ; =====================================================================
@@ -483,13 +643,16 @@ A_TrayMenu.Insert "2&", "Aide (Ctrl+Alt+H)", (*) => Aide()
 A_TrayMenu.Insert "3&", "Modifier mes raccourcis texte", (*) => Run('notepad "' CONFIG '"')
 A_TrayMenu.Insert "4&", "Recharger", (*) => Reload()
 A_TrayMenu.Insert "5&", "Lancer au démarrage de Windows", BasculerDemarrage
-A_TrayMenu.Insert "6&"
+A_TrayMenu.Insert "6&", "Convertir dans le clic droit", BasculerClicDroit
+A_TrayMenu.Insert "7&"
 A_TrayMenu.Default := "Barre de luminosité"     ; un simple clic sur l'icône affiche / masque la barre
 A_TrayMenu.ClickCount := 1
 if g_barreActive
     A_TrayMenu.Check "Barre de luminosité"
 if FileExist(lienDemarrage)
     A_TrayMenu.Check "Lancer au démarrage de Windows"
+if g_clicDroitActif
+    A_TrayMenu.Check "Convertir dans le clic droit"
 
 BasculerDemarrage(nomItem, *) {
     global lienDemarrage
@@ -521,7 +684,9 @@ Aide() {
     texte .= "   Ctrl + Alt + ↑ / ↓               →  +10 % / -10 %`n"
     texte .= "   Molette sur la barre des tâches  →  +5 % / -5 %`n`n"
     texte .= "CONVERTISSEUR`n"
-    texte .= "   Sélectionne des fichiers, puis Ctrl + Alt + C`n`n"
+    texte .= "   Sélectionne des fichiers, puis Ctrl + Alt + C`n"
+    texte .= "   ou clic droit → Afficher plus d'options → Convertir avec Mon Toolkit`n"
+    texte .= "   Images, vidéos, sons, Word ↔ PDF, PowerPoint et Excel → PDF`n`n"
     texte .= "AIDE`n"
     texte .= "   Ctrl + Alt + H"
     MsgBox texte, "Mon Toolkit"
